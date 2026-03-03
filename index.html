@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CleanLoop — Public Space Waste Management Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root {
+  --bg-primary: #0a0e1a;
+  --bg-secondary: #111827;
+  --bg-card: #1a2235;
+  --bg-card-hover: #1f2a40;
+  --border: #2a3550;
+  --text-primary: #e8ecf4;
+  --text-secondary: #8899b4;
+  --text-muted: #5a6a85;
+  --accent-green: #22c55e;
+  --accent-green-dim: #16a34a;
+  --accent-blue: #3b82f6;
+  --accent-blue-dim: #2563eb;
+  --accent-orange: #f59e0b;
+  --accent-red: #ef4444;
+  --accent-purple: #a855f7;
+  --accent-cyan: #06b6d4;
+  --accent-teal: #14b8a6;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg-primary); color: var(--text-primary); overflow: hidden; height: 100vh; }
+
+/* TOP BAR */
+.topbar { display:flex; align-items:center; justify-content:space-between; height:56px; background:var(--bg-secondary); border-bottom:1px solid var(--border); padding:0 20px; z-index:1000; position:relative; }
+.topbar-left { display:flex; align-items:center; gap:14px; }
+.logo { display:flex; align-items:center; gap:8px; }
+.logo-icon { width:32px; height:32px; border-radius:8px; background: linear-gradient(135deg, var(--accent-green), var(--accent-teal)); display:flex; align-items:center; justify-content:center; font-size:16px; }
+.logo-text { font-size:18px; font-weight:700; letter-spacing:-0.5px; }
+.logo-text span { color: var(--accent-green); }
+.topbar-badge { font-size:10px; background:var(--accent-green); color:#000; padding:2px 8px; border-radius:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.topbar-center { display:flex; gap:4px; }
+.topbar-tab { padding:6px 16px; border-radius:20px; font-size:13px; cursor:pointer; border:none; background:transparent; color:var(--text-secondary); transition:all .2s; font-weight:500; }
+.topbar-tab:hover { color:var(--text-primary); background:var(--bg-card); }
+.topbar-tab.active { background:var(--accent-green); color:#000; font-weight:600; }
+.topbar-right { display:flex; align-items:center; gap:12px; }
+.topbar-btn { background:var(--bg-card); border:1px solid var(--border); color:var(--text-secondary); padding:6px 14px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; display:flex; align-items:center; gap:6px; transition:all .2s; }
+.topbar-btn:hover { border-color:var(--accent-green); color:var(--text-primary); }
+.status-dot { width:8px; height:8px; border-radius:50%; background:var(--accent-green); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* LAYOUT */
+.layout { display:flex; height:calc(100vh - 56px); }
+
+/* LEFT SIDEBAR */
+.sidebar-left { width:320px; background:var(--bg-secondary); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+.sidebar-section { padding:16px; border-bottom:1px solid var(--border); }
+.sidebar-section-title { font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-bottom:12px; font-weight:600; display:flex; align-items:center; justify-content:space-between; }
+.sidebar-section-title .count { background:var(--bg-card); padding:2px 8px; border-radius:10px; font-size:10px; color:var(--text-secondary); }
+.sidebar-scroll { flex:1; overflow-y:auto; }
+.sidebar-scroll::-webkit-scrollbar { width:4px; }
+.sidebar-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+
+/* Agent Cards */
+.agent-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:10px; cursor:pointer; transition:all .2s; }
+.agent-card:hover { border-color:var(--accent-green); transform:translateY(-1px); box-shadow: var(--shadow); }
+.agent-card.active { border-color:var(--accent-green); background: rgba(34,197,94,0.05); }
+.agent-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.agent-icon { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+.agent-icon.route { background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(59,130,246,0.05)); }
+.agent-icon.engage { background: linear-gradient(135deg, rgba(168,85,247,0.2), rgba(168,85,247,0.05)); }
+.agent-icon.weather { background: linear-gradient(135deg, rgba(6,182,212,0.2), rgba(6,182,212,0.05)); }
+.agent-icon.ar { background: linear-gradient(135deg, rgba(245,158,11,0.2), rgba(245,158,11,0.05)); }
+.agent-name { font-size:13px; font-weight:600; }
+.agent-status { font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:4px; }
+.agent-status .dot { width:6px; height:6px; border-radius:50%; }
+.dot.green { background:var(--accent-green); }
+.dot.blue { background:var(--accent-blue); }
+.dot.orange { background:var(--accent-orange); }
+.agent-metrics { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.metric-mini { background:var(--bg-primary); border-radius:var(--radius-sm); padding:8px 10px; }
+.metric-mini-label { font-size:10px; color:var(--text-muted); margin-bottom:2px; }
+.metric-mini-value { font-size:15px; font-weight:700; }
+.metric-mini-value.green { color:var(--accent-green); }
+.metric-mini-value.blue { color:var(--accent-blue); }
+.metric-mini-value.orange { color:var(--accent-orange); }
+.metric-mini-value.red { color:var(--accent-red); }
+
+/* BIN LIST */
+.bin-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--radius-sm); cursor:pointer; transition:all .15s; }
+.bin-item:hover { background:var(--bg-card); }
+.bin-item.selected { background:var(--bg-card); border-left:3px solid var(--accent-green); }
+.bin-fill-ring { width:36px; height:36px; border-radius:50%; position:relative; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.bin-fill-ring svg { position:absolute; top:0; left:0; }
+.bin-fill-pct { font-size:10px; font-weight:700; }
+.bin-info { flex:1; min-width:0; }
+.bin-name { font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bin-location { font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bin-badge { font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; flex-shrink:0; }
+.bin-badge.critical { background:rgba(239,68,68,0.15); color:var(--accent-red); }
+.bin-badge.warning { background:rgba(245,158,11,0.15); color:var(--accent-orange); }
+.bin-badge.good { background:rgba(34,197,94,0.15); color:var(--accent-green); }
+
+/* MAP */
+.map-container { flex:1; position:relative; }
+#map { width:100%; height:100%; background:var(--bg-primary); }
+.leaflet-container { background: var(--bg-primary) !important; }
+.leaflet-tile-pane { filter: brightness(0.7) contrast(1.1) saturate(0.3) hue-rotate(180deg) invert(1); }
+.leaflet-control-zoom { border:1px solid var(--border) !important; }
+.leaflet-control-zoom a { background:var(--bg-card) !important; color:var(--text-primary) !important; border-color:var(--border) !important; }
+
+/* Map Overlays */
+.map-overlay-top { position:absolute; top:16px; left:16px; z-index:800; display:flex; gap:8px; }
+.map-chip { background:var(--bg-card); border:1px solid var(--border); border-radius:20px; padding:6px 14px; font-size:12px; color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; gap:6px; transition:all .2s; backdrop-filter:blur(12px); }
+.map-chip:hover { border-color:var(--accent-green); color:var(--text-primary); }
+.map-chip.active { border-color:var(--accent-green); color:var(--accent-green); background:rgba(34,197,94,0.08); }
+.map-overlay-bottom { position:absolute; bottom:24px; left:16px; right:16px; z-index:800; display:flex; gap:12px; pointer-events:none; }
+.map-overlay-bottom > * { pointer-events:all; }
+
+/* Stats Bar */
+.stats-bar { display:flex; gap:10px; flex:1; }
+.stat-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px 18px; flex:1; backdrop-filter:blur(12px); min-width:0; }
+.stat-label { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+.stat-value { font-size:22px; font-weight:700; }
+.stat-change { font-size:11px; margin-top:2px; }
+.stat-change.up { color:var(--accent-green); }
+.stat-change.down { color:var(--accent-red); }
+
+/* RIGHT PANEL */
+.sidebar-right { width:360px; background:var(--bg-secondary); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+.panel-tabs { display:flex; border-bottom:1px solid var(--border); }
+.panel-tab { flex:1; padding:12px; text-align:center; font-size:12px; font-weight:600; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; transition:all .2s; }
+.panel-tab:hover { color:var(--text-secondary); }
+.panel-tab.active { color:var(--accent-green); border-bottom-color:var(--accent-green); }
+.panel-content { flex:1; overflow-y:auto; padding:16px; }
+.panel-content::-webkit-scrollbar { width:4px; }
+.panel-content::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+
+/* Weather Module */
+.weather-card { background: linear-gradient(135deg, #0c1929, #152238); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:14px; }
+.weather-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.weather-temp { font-size:36px; font-weight:700; }
+.weather-temp sup { font-size:16px; }
+.weather-icon-large { font-size:40px; }
+.weather-desc { font-size:13px; color:var(--text-secondary); margin-bottom:14px; }
+.weather-details { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.weather-detail { text-align:center; }
+.weather-detail-icon { font-size:16px; margin-bottom:2px; }
+.weather-detail-val { font-size:14px; font-weight:600; }
+.weather-detail-label { font-size:10px; color:var(--text-muted); }
+.weather-forecast { display:flex; gap:6px; margin-top:14px; }
+.forecast-item { flex:1; background:var(--bg-card); border-radius:var(--radius-sm); padding:10px 6px; text-align:center; }
+.forecast-day { font-size:10px; color:var(--text-muted); margin-bottom:4px; }
+.forecast-icon { font-size:18px; margin-bottom:2px; }
+.forecast-temp { font-size:12px; font-weight:600; }
+.weather-impact { margin-top:14px; }
+.weather-impact-title { font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); margin-bottom:8px; font-weight:600; }
+.impact-item { display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid rgba(255,255,255,0.05); }
+.impact-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.impact-text { font-size:12px; color:var(--text-secondary); flex:1; }
+.impact-badge { font-size:10px; padding:2px 8px; border-radius:8px; font-weight:600; }
+
+/* AR Module */
+.ar-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:14px; }
+.ar-preview { height:180px; background: linear-gradient(135deg, #1a1a3e, #2d1f4e); position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.ar-grid { position:absolute; inset:0; background-image:
+  linear-gradient(rgba(168,85,247,0.1) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(168,85,247,0.1) 1px, transparent 1px);
+  background-size: 30px 30px;
+  animation: arScroll 4s linear infinite;
+}
+@keyframes arScroll { to { transform: translateY(30px); } }
+.ar-preview-content { position:relative; z-index:1; text-align:center; }
+.ar-preview-icon { font-size:48px; margin-bottom:8px; }
+.ar-preview-text { font-size:12px; color:var(--accent-purple); font-weight:600; }
+.ar-body { padding:14px; }
+.ar-feature { display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+.ar-feature:last-child { border-bottom:none; }
+.ar-feature-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; background:rgba(168,85,247,0.1); }
+.ar-feature-text { flex:1; }
+.ar-feature-title { font-size:12px; font-weight:600; margin-bottom:2px; }
+.ar-feature-desc { font-size:11px; color:var(--text-muted); line-height:1.4; }
+
+/* Reports & Engagement */
+.report-item { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:10px; transition:all .2s; }
+.report-item:hover { border-color:var(--accent-purple); }
+.report-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.report-type { font-size:11px; font-weight:600; padding:3px 10px; border-radius:10px; }
+.report-type.damage { background:rgba(239,68,68,0.15); color:var(--accent-red); }
+.report-type.overflow { background:rgba(245,158,11,0.15); color:var(--accent-orange); }
+.report-type.request { background:rgba(59,130,246,0.15); color:var(--accent-blue); }
+.report-type.feedback { background:rgba(34,197,94,0.15); color:var(--accent-green); }
+.report-time { font-size:11px; color:var(--text-muted); }
+.report-body { font-size:12px; color:var(--text-secondary); line-height:1.5; margin-bottom:8px; }
+.report-meta { display:flex; align-items:center; gap:12px; font-size:11px; color:var(--text-muted); }
+.report-channel { display:flex; align-items:center; gap:4px; }
+
+/* Route Card */
+.route-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:10px; }
+.route-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.route-name { font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px; }
+.route-status { font-size:10px; padding:3px 10px; border-radius:10px; font-weight:600; }
+.route-status.optimised { background:rgba(34,197,94,0.15); color:var(--accent-green); }
+.route-status.active { background:rgba(59,130,246,0.15); color:var(--accent-blue); }
+.route-status.pending { background:rgba(245,158,11,0.15); color:var(--accent-orange); }
+.route-stops { display:flex; flex-direction:column; gap:4px; margin-bottom:10px; }
+.route-stop { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-secondary); }
+.route-stop-dot { width:10px; height:10px; border-radius:50%; border:2px solid var(--accent-blue); position:relative; }
+.route-stop-dot.filled { background:var(--accent-blue); }
+.route-stop-line { width:2px; height:12px; background:var(--border); margin-left:4px; }
+.route-info { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.route-info-item { text-align:center; background:var(--bg-primary); border-radius:var(--radius-sm); padding:8px; }
+.route-info-val { font-size:14px; font-weight:700; }
+.route-info-label { font-size:10px; color:var(--text-muted); }
+
+/* Progress bar */
+.progress-bar { height:4px; background:var(--bg-primary); border-radius:2px; overflow:hidden; margin-top:6px; }
+.progress-fill { height:100%; border-radius:2px; transition: width .5s ease; }
+.progress-fill.green { background: linear-gradient(90deg, var(--accent-green), var(--accent-teal)); }
+.progress-fill.blue { background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); }
+.progress-fill.orange { background: linear-gradient(90deg, var(--accent-orange), var(--accent-red)); }
+
+/* Behavioural Analytics */
+.analytics-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+.analytics-label { font-size:12px; color:var(--text-secondary); flex:1; }
+.analytics-bar { flex:2; height:6px; background:var(--bg-primary); border-radius:3px; overflow:hidden; }
+.analytics-bar-fill { height:100%; border-radius:3px; }
+.analytics-val { font-size:12px; font-weight:600; width:40px; text-align:right; }
+
+/* Section Heading */
+.section-heading { font-size:13px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+.section-heading .icon { width:24px; height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; }
+
+/* Mini chart */
+.mini-chart { display:flex; align-items:flex-end; gap:3px; height:40px; }
+.mini-chart-bar { flex:1; border-radius:2px 2px 0 0; transition:height .3s; min-width:4px; }
+
+/* Custom Leaflet Marker */
+.custom-marker { background:none; border:none; }
+.marker-pin { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; border:2px solid rgba(255,255,255,0.3); box-shadow: 0 2px 8px rgba(0,0,0,0.4); position:relative; }
+.marker-pin::after { content:''; position:absolute; bottom:-6px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; }
+.marker-pin.critical { background:var(--accent-red); }
+.marker-pin.critical::after { border-top:6px solid var(--accent-red); }
+.marker-pin.warning { background:var(--accent-orange); }
+.marker-pin.warning::after { border-top:6px solid var(--accent-orange); }
+.marker-pin.good { background:var(--accent-green); }
+.marker-pin.good::after { border-top:6px solid var(--accent-green); }
+.marker-pin.normal { background:var(--accent-blue); }
+.marker-pin.normal::after { border-top:6px solid var(--accent-blue); }
+
+/* Popup Styles */
+.leaflet-popup-content-wrapper { background:var(--bg-card) !important; color:var(--text-primary) !important; border:1px solid var(--border) !important; border-radius:var(--radius) !important; box-shadow:var(--shadow) !important; }
+.leaflet-popup-tip { background:var(--bg-card) !important; border:1px solid var(--border) !important; }
+.leaflet-popup-content { margin:12px 16px !important; font-size:13px !important; line-height:1.5 !important; }
+.popup-title { font-weight:700; font-size:14px; margin-bottom:6px; }
+.popup-row { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; }
+.popup-row .label { color:var(--text-muted); }
+.popup-row .value { font-weight:600; }
+
+/* Integration Tags */
+.integration-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.int-tag { font-size:10px; padding:3px 8px; border-radius:6px; font-weight:600; border:1px solid; }
+.int-tag.traffic { border-color:rgba(59,130,246,0.3); color:var(--accent-blue); background:rgba(59,130,246,0.08); }
+.int-tag.weather { border-color:rgba(6,182,212,0.3); color:var(--accent-cyan); background:rgba(6,182,212,0.08); }
+.int-tag.events { border-color:rgba(168,85,247,0.3); color:var(--accent-purple); background:rgba(168,85,247,0.08); }
+.int-tag.social { border-color:rgba(245,158,11,0.3); color:var(--accent-orange); background:rgba(245,158,11,0.08); }
+.int-tag.mobile { border-color:rgba(34,197,94,0.3); color:var(--accent-green); background:rgba(34,197,94,0.08); }
+
+/* Toggle */
+.toggle-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; }
+.toggle-label { font-size:12px; color:var(--text-secondary); }
+.toggle { width:36px; height:20px; background:var(--border); border-radius:10px; position:relative; cursor:pointer; transition:all .2s; }
+.toggle.on { background:var(--accent-green); }
+.toggle-knob { width:16px; height:16px; border-radius:50%; background:#fff; position:absolute; top:2px; left:2px; transition:all .2s; }
+.toggle.on .toggle-knob { left:18px; }
+
+/* Notification badge */
+.notif-badge { position:absolute; top:-4px; right:-4px; width:16px; height:16px; border-radius:50%; background:var(--accent-red); font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; border:2px solid var(--bg-secondary); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">
+      <div class="logo-icon">♻️</div>
+      <div class="logo-text">Clean<span>Loop</span></div>
+    </div>
+    <div class="topbar-badge">Live</div>
+  </div>
+  <div class="topbar-center">
+    <button class="topbar-tab active" onclick="switchView('map')">Map View</button>
+    <button class="topbar-tab" onclick="switchView('routes')">Routes</button>
+    <button class="topbar-tab" onclick="switchView('analytics')">Analytics</button>
+    <button class="topbar-tab" onclick="switchView('engagement')">Engagement</button>
+  </div>
+  <div class="topbar-right">
+    <button class="topbar-btn" onclick="toggleARMode()">
+      <span>🥽</span> AR Mode
+    </button>
+    <button class="topbar-btn" style="position:relative;" onclick="toggleNotifications()">
+      <span>🔔</span> Alerts
+      <span class="notif-badge">5</span>
+    </button>
+    <div class="status-dot" title="All systems operational"></div>
+  </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="layout">
+
+  <!-- LEFT SIDEBAR -->
+  <div class="sidebar-left">
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Active Agents <span class="count">4</span></div>
+
+      <!-- Route Optimisation Agent -->
+      <div class="agent-card active" onclick="selectAgent('route')">
+        <div class="agent-header">
+          <div class="agent-icon route">🛣️</div>
+          <div>
+            <div class="agent-name">Route Optimisation Agent</div>
+            <div class="agent-status"><span class="dot green"></span> ML Model Active</div>
+          </div>
+        </div>
+        <div class="agent-metrics">
+          <div class="metric-mini">
+            <div class="metric-mini-label">Fill Prediction</div>
+            <div class="metric-mini-value green">94.2%</div>
+          </div>
+          <div class="metric-mini">
+            <div class="metric-mini-label">Route Efficiency</div>
+            <div class="metric-mini-value blue">87%</div>
+          </div>
+          <div class="metric-mini">
+            <div class="metric-mini-label">Traffic Load</div>
+            <div class="metric-mini-value orange">Med</div>
+          </div>
+          <div class="metric-mini">
+            <div class="metric-mini-label">Next Event</div>
+            <div class="metric-mini-value" style="font-size:11px;">Market 2pm</div>
+          </div>
+        </div>
+        <div class="integration-tags">
+          <span class="int-tag traffic">Traffic System</span>
+          <span class="int-tag weather">WeatherNext2</span>
+          <span class="int-tag events">Event Calendar</span>
+        </div>
+      </div>
+
+      <!-- Public Engagement Agent -->
+      <div class="agent-card" onclick="selectAgent('engage')">
+        <div class="agent-header">
+          <div class="agent-icon engage">📢</div>
+          <div>
+            <div class="agent-name">Public Engagement Agent</div>
+            <div class="agent-status"><span class="dot green"></span> Monitoring channels</div>
+          </div>
+        </div>
+        <div class="agent-metrics">
+          <div class="metric-mini">
+            <div class="metric-mini-label">Open Reports</div>
+            <div class="metric-mini-value orange">12</div>
+          </div>
+          <div class="metric-mini">
+            <div class="metric-mini-label">Resolved Today</div>
+            <div class="metric-mini-value green">28</div>
+          </div>
+          <div class="metric-mini">
+            <div class="metric-mini-label">Avg Response</div>
+            <div class="metric-mini-value blue">18m</div>
+          </div>
+          <div class="metric-mini">
+            <div class="metric-mini-label">Sentiment</div>
+            <div class="metric-mini-value green">+72%</div>
+          </div>
+        </div>
+        <div class="integration-tags">
+          <span class="int-tag mobile">Mobile App</span>
+          <span class="int-tag social">Social Media</span>
+          <span class="int-tag events">Gov Channels</span>
+        </div>
+      </div>
+
+      <!-- WeatherNext2 Module -->
+      <div class="agent-card" onclick="selectAgent('weather')">
+        <div class="agent-header">
+          <div class="agent-icon weather">🌦️</div>
+          <div>
+            <div class="agent-name">WeatherNext2 Module</div>
+            <div class="agent-status"><span class="dot green"></span> Feed active</div>
+          </div>
+        </div>
+        <div class="agent-metrics">
+          <div class="metric-mini">
+            <div class="metric-mini-label">Temp</div>
+            <div class="metric-mini-value">14°C</div>
+          </div>
+          <div class="metric-mini">
+            <div class="metric-mini-label">Rain Prob</div>
+            <div class="metric-mini-value blue">65%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AR Module -->
+      <div class="agent-card" onclick="selectAgent('ar')">
+        <div class="agent-header">
+          <div class="agent-icon ar">🥽</div>
+          <div>
+            <div class="agent-name">AR Integration Module</div>
+            <div class="agent-status"><span class="dot blue"></span> Standby</div>
+          </div>
+        </div>
+        <div class="agent-metrics">
+          <div class="metric-mini">
+            <div class="metric-mini-label">Active Overlays</div>
+            <div class="metric-mini-value blue">3</div>
+          </div>
+          <div class="metric-mini">
+            <div class="metric-mini-label">Field Users</div>
+            <div class="metric-mini-value">7</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-scroll">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">ThinkLid Fleet <span class="count">24 tracked</span></div>
+
+        <!-- ThinkLid Fleet Summary -->
+        <div style="display:flex; gap:6px; margin-bottom:12px;">
+          <div style="flex:1; background:var(--bg-card); border-radius:var(--radius-sm); padding:8px; text-align:center; border:1px solid var(--border);">
+            <div style="font-size:16px; font-weight:700; color:var(--accent-teal);">14</div>
+            <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">240lt Units</div>
+          </div>
+          <div style="flex:1; background:var(--bg-card); border-radius:var(--radius-sm); padding:8px; text-align:center; border:1px solid var(--border);">
+            <div style="font-size:16px; font-weight:700; color:var(--accent-cyan);">10</div>
+            <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">120lt Units</div>
+          </div>
+          <div style="flex:1; background:var(--bg-card); border-radius:var(--radius-sm); padding:8px; text-align:center; border:1px solid var(--border);">
+            <div style="font-size:16px; font-weight:700; color:var(--accent-green);">23</div>
+            <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Lids OK</div>
+          </div>
+        </div>
+
+        <div class="bin-item selected" onclick="focusBin(0)">
+          <div class="bin-fill-ring">
+            <svg width="36" height="36"><circle cx="18" cy="18" r="15" fill="none" stroke="#2a3550" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="94.2" stroke-dashoffset="9.4" stroke-linecap="round" transform="rotate(-90 18 18)"/></svg>
+            <span class="bin-fill-pct" style="color:var(--accent-red)">90%</span>
+          </div>
+          <div class="bin-info">
+            <div class="bin-name">Central Park Main</div>
+            <div class="bin-location">Victoria Park, Gate A · <span style="color:var(--accent-teal);">ThinkLid 240lt</span></div>
+          </div>
+          <span class="bin-badge critical">Critical</span>
+        </div>
+
+        <div class="bin-item" onclick="focusBin(1)">
+          <div class="bin-fill-ring">
+            <svg width="36" height="36"><circle cx="18" cy="18" r="15" fill="none" stroke="#2a3550" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="94.2" stroke-dashoffset="14.1" stroke-linecap="round" transform="rotate(-90 18 18)"/></svg>
+            <span class="bin-fill-pct" style="color:var(--accent-red)">85%</span>
+          </div>
+          <div class="bin-info">
+            <div class="bin-name">Market Square West</div>
+            <div class="bin-location">Borough Market, Bay 3 · <span style="color:var(--accent-teal);">ThinkLid 240lt</span></div>
+          </div>
+          <span class="bin-badge critical">Critical</span>
+        </div>
+
+        <div class="bin-item" onclick="focusBin(2)">
+          <div class="bin-fill-ring">
+            <svg width="36" height="36"><circle cx="18" cy="18" r="15" fill="none" stroke="#2a3550" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="94.2" stroke-dashoffset="28.3" stroke-linecap="round" transform="rotate(-90 18 18)"/></svg>
+            <span class="bin-fill-pct" style="color:var(--accent-orange)">70%</span>
+          </div>
+          <div class="bin-info">
+            <div class="bin-name">Riverside Walk South</div>
+            <div class="bin-location">Thames Path, Sec 12 · <span style="color:var(--accent-cyan);">ThinkLid 120lt</span></div>
+          </div>
+          <span class="bin-badge warning">Warning</span>
+        </div>
+
+        <div class="bin-item" onclick="focusBin(3)">
+          <div class="bin-fill-ring">
+            <svg width="36" height="36"><circle cx="18" cy="18" r="15" fill="none" stroke="#2a3550" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="94.2" stroke-dashoffset="33" stroke-linecap="round" transform="rotate(-90 18 18)"/></svg>
+            <span class="bin-fill-pct" style="color:var(--accent-orange)">65%</span>
+          </div>
+          <div class="bin-info">
+            <div class="bin-name">High Street Cluster</div>
+            <div class="bin-location">Oxford St, Zone B · <span style="color:var(--accent-teal);">ThinkLid 240lt</span></div>
+          </div>
+          <span class="bin-badge warning">Warning</span>
+        </div>
+
+        <div class="bin-item" onclick="focusBin(4)">
+          <div class="bin-fill-ring">
+            <svg width="36" height="36"><circle cx="18" cy="18" r="15" fill="none" stroke="#2a3550" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="#22c55e" stroke-width="3" stroke-dasharray="94.2" stroke-dashoffset="56.5" stroke-linecap="round" transform="rotate(-90 18 18)"/></svg>
+            <span class="bin-fill-pct" style="color:var(--accent-green)">40%</span>
+          </div>
+          <div class="bin-info">
+            <div class="bin-name">Station Plaza North</div>
+            <div class="bin-location">Kings Cross, Exit 2 · <span style="color:var(--accent-cyan);">ThinkLid 120lt</span></div>
+          </div>
+          <span class="bin-badge good">Good</span>
+        </div>
+
+        <div class="bin-item" onclick="focusBin(5)">
+          <div class="bin-fill-ring">
+            <svg width="36" height="36"><circle cx="18" cy="18" r="15" fill="none" stroke="#2a3550" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="#22c55e" stroke-width="3" stroke-dasharray="94.2" stroke-dashoffset="70.7" stroke-linecap="round" transform="rotate(-90 18 18)"/></svg>
+            <span class="bin-fill-pct" style="color:var(--accent-green)">25%</span>
+          </div>
+          <div class="bin-info">
+            <div class="bin-name">Library Gardens</div>
+            <div class="bin-location">Camden, North Wing · <span style="color:var(--accent-cyan);">ThinkLid 120lt</span></div>
+          </div>
+          <span class="bin-badge good">Good</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-container">
+    <div id="map"></div>
+
+    <div class="map-overlay-top">
+      <div class="map-chip active" onclick="toggleLayer('bins')">🗑️ Bins</div>
+      <div class="map-chip active" onclick="toggleLayer('routes')">🛣️ Routes</div>
+      <div class="map-chip" onclick="toggleLayer('heatmap')">🔥 Heatmap</div>
+      <div class="map-chip" onclick="toggleLayer('weather')">🌧️ Weather</div>
+      <div class="map-chip" onclick="toggleLayer('traffic')">🚗 Traffic</div>
+      <div class="map-chip" onclick="toggleLayer('events')">📅 Events</div>
+    </div>
+
+    <div class="map-overlay-bottom">
+      <div class="stats-bar">
+        <div class="stat-card">
+          <div class="stat-label">ThinkLid Collections Today</div>
+          <div class="stat-value" style="color:var(--accent-green)">142</div>
+          <div class="stat-change up">↑ 12% vs last week</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">ThinkLid Fleet</div>
+          <div class="stat-value" style="color:var(--accent-teal)">24</div>
+          <div class="stat-change up">14× 240lt · 10× 120lt</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Alerts</div>
+          <div class="stat-value" style="color:var(--accent-orange)">5</div>
+          <div class="stat-change down">1 ThinkLid lid jammed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Public Reports</div>
+          <div class="stat-value" style="color:var(--accent-purple)">12</div>
+          <div class="stat-change up">Avg 18min response</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="sidebar-right">
+    <div class="panel-tabs">
+      <div class="panel-tab active" onclick="switchPanel('weather')">Weather</div>
+      <div class="panel-tab" onclick="switchPanel('ar')">AR</div>
+      <div class="panel-tab" onclick="switchPanel('routes')">Routes</div>
+      <div class="panel-tab" onclick="switchPanel('reports')">Reports</div>
+    </div>
+
+    <div class="panel-content" id="panel-weather">
+      <!-- WeatherNext2 -->
+      <div class="section-heading"><span class="icon" style="background:rgba(6,182,212,0.15);">🌦️</span> WeatherNext2 Forecast</div>
+      <div class="weather-card">
+        <div class="weather-header">
+          <div>
+            <div class="weather-temp">14<sup>°C</sup></div>
+            <div class="weather-desc">Partly Cloudy — Showers from 2pm</div>
+          </div>
+          <div class="weather-icon-large">⛅</div>
+        </div>
+        <div class="weather-details">
+          <div class="weather-detail">
+            <div class="weather-detail-icon">💨</div>
+            <div class="weather-detail-val">18 km/h</div>
+            <div class="weather-detail-label">Wind</div>
+          </div>
+          <div class="weather-detail">
+            <div class="weather-detail-icon">💧</div>
+            <div class="weather-detail-val">65%</div>
+            <div class="weather-detail-label">Rain Prob</div>
+          </div>
+          <div class="weather-detail">
+            <div class="weather-detail-icon">🌡️</div>
+            <div class="weather-detail-val">72%</div>
+            <div class="weather-detail-label">Humidity</div>
+          </div>
+        </div>
+        <div class="weather-forecast">
+          <div class="forecast-item">
+            <div class="forecast-day">Mon</div>
+            <div class="forecast-icon">🌧️</div>
+            <div class="forecast-temp">12°</div>
+          </div>
+          <div class="forecast-item">
+            <div class="forecast-day">Tue</div>
+            <div class="forecast-icon">⛅</div>
+            <div class="forecast-temp">15°</div>
+          </div>
+          <div class="forecast-item">
+            <div class="forecast-day">Wed</div>
+            <div class="forecast-icon">☀️</div>
+            <div class="forecast-temp">17°</div>
+          </div>
+          <div class="forecast-item">
+            <div class="forecast-day">Thu</div>
+            <div class="forecast-icon">🌤️</div>
+            <div class="forecast-temp">16°</div>
+          </div>
+          <div class="forecast-item">
+            <div class="forecast-day">Fri</div>
+            <div class="forecast-icon">🌧️</div>
+            <div class="forecast-temp">11°</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="weather-impact">
+        <div class="weather-impact-title">Waste Collection Impact Analysis</div>
+        <div class="impact-item">
+          <div class="impact-dot" style="background:var(--accent-orange)"></div>
+          <div class="impact-text">Rain at 2pm will increase park bin usage by ~30% as visitors congregate under shelters</div>
+          <div class="impact-badge" style="background:rgba(245,158,11,0.15); color:var(--accent-orange);">Medium</div>
+        </div>
+        <div class="impact-item">
+          <div class="impact-dot" style="background:var(--accent-red)"></div>
+          <div class="impact-text">High winds risk litter scatter from ThinkLid 120lt units on riverside — ensure lids latched; recommend early collection</div>
+          <div class="impact-badge" style="background:rgba(239,68,68,0.15); color:var(--accent-red);">High</div>
+        </div>
+        <div class="impact-item">
+          <div class="impact-dot" style="background:var(--accent-green)"></div>
+          <div class="impact-text">Wednesday sunshine will boost park attendance — pre-schedule extra ThinkLid 240lt capacity at high-footfall zones</div>
+          <div class="impact-badge" style="background:rgba(34,197,94,0.15); color:var(--accent-green);">Plan</div>
+        </div>
+        <div class="impact-item">
+          <div class="impact-dot" style="background:var(--accent-blue)"></div>
+          <div class="impact-text">Friday heavy rain — verify all ThinkLid units sealed; focus servicing on sheltered ThinkLid 120lt locations</div>
+          <div class="impact-badge" style="background:rgba(59,130,246,0.15); color:var(--accent-blue);">Info</div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="section-heading"><span class="icon" style="background:rgba(59,130,246,0.15);">📊</span> Usage Pattern Analysis</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:10px;">Hourly bin fill rate prediction</div>
+        <div class="mini-chart" style="height:80px;">
+          <div class="mini-chart-bar" style="height:15%; background:var(--accent-green);"></div>
+          <div class="mini-chart-bar" style="height:10%; background:var(--accent-green);"></div>
+          <div class="mini-chart-bar" style="height:8%; background:var(--accent-green);"></div>
+          <div class="mini-chart-bar" style="height:12%; background:var(--accent-green);"></div>
+          <div class="mini-chart-bar" style="height:20%; background:var(--accent-green);"></div>
+          <div class="mini-chart-bar" style="height:35%; background:var(--accent-green);"></div>
+          <div class="mini-chart-bar" style="height:55%; background:var(--accent-orange);"></div>
+          <div class="mini-chart-bar" style="height:70%; background:var(--accent-orange);"></div>
+          <div class="mini-chart-bar" style="height:85%; background:var(--accent-red);"></div>
+          <div class="mini-chart-bar" style="height:95%; background:var(--accent-red);"></div>
+          <div class="mini-chart-bar" style="height:100%; background:var(--accent-red);"></div>
+          <div class="mini-chart-bar" style="height:90%; background:var(--accent-red);"></div>
+          <div class="mini-chart-bar" style="height:75%; background:var(--accent-orange);"></div>
+          <div class="mini-chart-bar" style="height:80%; background:var(--accent-orange);"></div>
+          <div class="mini-chart-bar" style="height:65%; background:var(--accent-orange);"></div>
+          <div class="mini-chart-bar" style="height:50%; background:var(--accent-orange);"></div>
+          <div class="mini-chart-bar" style="height:40%; background:var(--accent-green);"></div>
+          <div class="mini-chart-bar" style="height:30%; background:var(--accent-green);"></div>
+          <div class="mini-chart-bar" style="height:20%; background:var(--accent-green);"></div>
+          <div class="mini-chart-bar" style="height:15%; background:var(--accent-green);"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:4px;">
+          <span>6am</span><span>10am</span><span>2pm</span><span>6pm</span><span>10pm</span>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="section-heading"><span class="icon" style="background:rgba(168,85,247,0.15);">🧠</span> Behavioural Analytics</div>
+        <div class="analytics-row">
+          <div class="analytics-label">Weekday Usage</div>
+          <div class="analytics-bar"><div class="analytics-bar-fill" style="width:72%; background:var(--accent-blue);"></div></div>
+          <div class="analytics-val" style="color:var(--accent-blue);">72%</div>
+        </div>
+        <div class="analytics-row">
+          <div class="analytics-label">Weekend Peak</div>
+          <div class="analytics-bar"><div class="analytics-bar-fill" style="width:94%; background:var(--accent-red);"></div></div>
+          <div class="analytics-val" style="color:var(--accent-red);">94%</div>
+        </div>
+        <div class="analytics-row">
+          <div class="analytics-label">Event Days</div>
+          <div class="analytics-bar"><div class="analytics-bar-fill" style="width:100%; background:var(--accent-orange);"></div></div>
+          <div class="analytics-val" style="color:var(--accent-orange);">100%</div>
+        </div>
+        <div class="analytics-row">
+          <div class="analytics-label">Recycling Rate</div>
+          <div class="analytics-bar"><div class="analytics-bar-fill" style="width:48%; background:var(--accent-green);"></div></div>
+          <div class="analytics-val" style="color:var(--accent-green);">48%</div>
+        </div>
+        <div class="analytics-row">
+          <div class="analytics-label">Litter Hotspots</div>
+          <div class="analytics-bar"><div class="analytics-bar-fill" style="width:35%; background:var(--accent-purple);"></div></div>
+          <div class="analytics-val" style="color:var(--accent-purple);">6</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AR PANEL -->
+    <div class="panel-content" id="panel-ar" style="display:none;">
+      <div class="section-heading"><span class="icon" style="background:rgba(168,85,247,0.15);">🥽</span> AR Integration Module</div>
+
+      <div class="ar-card">
+        <div class="ar-preview">
+          <div class="ar-grid"></div>
+          <div class="ar-preview-content">
+            <div class="ar-preview-icon">🌐</div>
+            <div class="ar-preview-text">AR Overlay Active — 3 Layers</div>
+          </div>
+        </div>
+        <div class="ar-body">
+          <div class="ar-feature">
+            <div class="ar-feature-icon">📍</div>
+            <div class="ar-feature-text">
+              <div class="ar-feature-title">ThinkLid Location Overlay</div>
+              <div class="ar-feature-desc">Real-time fill levels for all ThinkLid 240lt and 120lt units visible through AR headset. Colour-coded markers show capacity, lid status, and sensor health.</div>
+            </div>
+          </div>
+          <div class="ar-feature">
+            <div class="ar-feature-icon">🛤️</div>
+            <div class="ar-feature-text">
+              <div class="ar-feature-title">Route Navigation</div>
+              <div class="ar-feature-desc">Turn-by-turn optimised route guidance overlaid on street view with ETA and traffic conditions.</div>
+            </div>
+          </div>
+          <div class="ar-feature">
+            <div class="ar-feature-icon">📸</div>
+            <div class="ar-feature-text">
+              <div class="ar-feature-title">ThinkLid Damage Documentation</div>
+              <div class="ar-feature-desc">Point-and-capture damage reports for ThinkLid units. Auto-detects 240lt vs 120lt model, GPS tags location, assesses lid mechanism severity, and creates work orders.</div>
+            </div>
+          </div>
+          <div class="ar-feature">
+            <div class="ar-feature-icon">📊</div>
+            <div class="ar-feature-text">
+              <div class="ar-feature-title">ThinkLid Data Visualisation</div>
+              <div class="ar-feature-desc">View historical fill data, collection frequency, and lid-cycle analytics overlaid on physical ThinkLid 240lt and 120lt locations. Compare performance by unit size.</div>
+            </div>
+          </div>
+          <div class="ar-feature">
+            <div class="ar-feature-icon">🎓</div>
+            <div class="ar-feature-text">
+              <div class="ar-feature-title">ThinkLid Training Mode</div>
+              <div class="ar-feature-desc">Interactive training for field operators covering ThinkLid 240lt and 120lt servicing procedures, lid mechanism maintenance, sensor recalibration, and safety protocols.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:10px;">
+        <div class="section-heading"><span class="icon" style="background:rgba(245,158,11,0.15);">⚙️</span> AR Settings</div>
+        <div class="toggle-row">
+          <div class="toggle-label">ThinkLid Fill Overlay</div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label">Route Guidance</div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label">Weather Overlay</div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label">Public Info Displays</div>
+          <div class="toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label">Damage Auto-Report</div>
+          <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="section-heading"><span class="icon" style="background:rgba(6,182,212,0.15);">👤</span> Connected Field Users</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; gap:10px; padding:8px; background:var(--bg-card); border-radius:var(--radius-sm);">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--accent-blue);display:flex;align-items:center;justify-content:center;font-size:13px;">JD</div>
+            <div style="flex:1"><div style="font-size:12px;font-weight:600;">J. Davies</div><div style="font-size:11px;color:var(--text-muted);">Route Alpha — En route</div></div>
+            <div class="status-dot"></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px; padding:8px; background:var(--bg-card); border-radius:var(--radius-sm);">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--accent-purple);display:flex;align-items:center;justify-content:center;font-size:13px;">SM</div>
+            <div style="flex:1"><div style="font-size:12px;font-weight:600;">S. Martinez</div><div style="font-size:11px;color:var(--text-muted);">Route Beta — Collecting</div></div>
+            <div class="status-dot"></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px; padding:8px; background:var(--bg-card); border-radius:var(--radius-sm);">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--accent-teal);display:flex;align-items:center;justify-content:center;font-size:13px;">AK</div>
+            <div style="flex:1"><div style="font-size:12px;font-weight:600;">A. Khan</div><div style="font-size:11px;color:var(--text-muted);">Inspection — Victoria Pk</div></div>
+            <div class="status-dot"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROUTES PANEL -->
+    <div class="panel-content" id="panel-routes" style="display:none;">
+      <div class="section-heading"><span class="icon" style="background:rgba(59,130,246,0.15);">🛣️</span> Optimised Routes</div>
+
+      <div class="route-card">
+        <div class="route-header">
+          <div class="route-name">🔵 Route Alpha</div>
+          <span class="route-status active">In Progress</span>
+        </div>
+        <div class="route-stops">
+          <div class="route-stop"><div class="route-stop-dot filled"></div> Central Park Main — <span style="color:var(--accent-teal);">240lt</span> (90%)</div>
+          <div style="margin-left:4px;"><div class="route-stop-line"></div></div>
+          <div class="route-stop"><div class="route-stop-dot filled"></div> Market Square West — <span style="color:var(--accent-teal);">240lt</span> (85%)</div>
+          <div style="margin-left:4px;"><div class="route-stop-line"></div></div>
+          <div class="route-stop"><div class="route-stop-dot"></div> Riverside Walk South — <span style="color:var(--accent-cyan);">120lt</span> (70%)</div>
+          <div style="margin-left:4px;"><div class="route-stop-line"></div></div>
+          <div class="route-stop"><div class="route-stop-dot"></div> High Street Cluster — <span style="color:var(--accent-teal);">240lt</span> (65%)</div>
+        </div>
+        <div class="route-info">
+          <div class="route-info-item">
+            <div class="route-info-val" style="color:var(--accent-blue);">12.4km</div>
+            <div class="route-info-label">Distance</div>
+          </div>
+          <div class="route-info-item">
+            <div class="route-info-val" style="color:var(--accent-green);">48min</div>
+            <div class="route-info-label">Est. Time</div>
+          </div>
+          <div class="route-info-item">
+            <div class="route-info-val" style="color:var(--accent-orange);">8</div>
+            <div class="route-info-label">Stops</div>
+          </div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill blue" style="width:45%;"></div></div>
+      </div>
+
+      <div class="route-card">
+        <div class="route-header">
+          <div class="route-name">🟣 Route Beta</div>
+          <span class="route-status optimised">Optimised</span>
+        </div>
+        <div class="route-stops">
+          <div class="route-stop"><div class="route-stop-dot filled"></div> Station Plaza North — <span style="color:var(--accent-cyan);">120lt</span> (40%)</div>
+          <div style="margin-left:4px;"><div class="route-stop-line"></div></div>
+          <div class="route-stop"><div class="route-stop-dot"></div> Library Gardens — <span style="color:var(--accent-cyan);">120lt</span> (25%)</div>
+          <div style="margin-left:4px;"><div class="route-stop-line"></div></div>
+          <div class="route-stop"><div class="route-stop-dot"></div> East End Common — <span style="color:var(--accent-teal);">240lt</span> (55%)</div>
+        </div>
+        <div class="route-info">
+          <div class="route-info-item">
+            <div class="route-info-val" style="color:var(--accent-blue);">8.7km</div>
+            <div class="route-info-label">Distance</div>
+          </div>
+          <div class="route-info-item">
+            <div class="route-info-val" style="color:var(--accent-green);">35min</div>
+            <div class="route-info-label">Est. Time</div>
+          </div>
+          <div class="route-info-item">
+            <div class="route-info-val" style="color:var(--accent-orange);">6</div>
+            <div class="route-info-label">Stops</div>
+          </div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill green" style="width:20%;"></div></div>
+      </div>
+
+      <div class="route-card">
+        <div class="route-header">
+          <div class="route-name">🟠 Route Gamma</div>
+          <span class="route-status pending">Scheduled 2pm</span>
+        </div>
+        <div class="route-stops">
+          <div class="route-stop"><div class="route-stop-dot"></div> Southbank Promenade — <span style="color:var(--accent-teal);">240lt</span> (60%)</div>
+          <div style="margin-left:4px;"><div class="route-stop-line"></div></div>
+          <div class="route-stop"><div class="route-stop-dot"></div> Festival Gardens — <span style="color:var(--accent-cyan);">120lt</span> (45%)</div>
+          <div style="margin-left:4px;"><div class="route-stop-line"></div></div>
+          <div class="route-stop"><div class="route-stop-dot"></div> Pier Approach — <span style="color:var(--accent-cyan);">120lt</span> (50%)</div>
+        </div>
+        <div class="route-info">
+          <div class="route-info-item">
+            <div class="route-info-val" style="color:var(--accent-blue);">6.2km</div>
+            <div class="route-info-label">Distance</div>
+          </div>
+          <div class="route-info-item">
+            <div class="route-info-val" style="color:var(--accent-green);">28min</div>
+            <div class="route-info-label">Est. Time</div>
+          </div>
+          <div class="route-info-item">
+            <div class="route-info-val" style="color:var(--accent-orange);">5</div>
+            <div class="route-info-label">Stops</div>
+          </div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill orange" style="width:0%;"></div></div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <div class="section-heading"><span class="icon" style="background:rgba(34,197,94,0.15);">🤖</span> ML Prediction Engine</div>
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px;">
+          <div style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">Next predicted critical ThinkLid units (2hr window)</div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span>Riverside Walk South <span style="color:var(--accent-cyan); font-size:10px;">120lt</span></span>
+              <span style="color:var(--accent-red); font-weight:600;">→ 92% by 3:30pm</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span>High Street Cluster <span style="color:var(--accent-teal); font-size:10px;">240lt</span></span>
+              <span style="color:var(--accent-orange); font-weight:600;">→ 85% by 4:00pm</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span>Station Plaza North <span style="color:var(--accent-cyan); font-size:10px;">120lt</span></span>
+              <span style="color:var(--accent-orange); font-weight:600;">→ 78% by 5:15pm</span>
+            </div>
+          </div>
+          <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border); font-size:11px; color:var(--text-muted);">
+            Model confidence: 94.2% · Last retrained: 2h ago · Training data: 48,230 samples
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <div class="section-heading"><span class="icon" style="background:rgba(245,158,11,0.15);">🚗</span> Traffic Integration</div>
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px;">
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px;">
+              <span style="color:var(--text-secondary);">A4 Corridor</span>
+              <span style="color:var(--accent-red); font-weight:600;">Heavy — +12min</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:12px;">
+              <span style="color:var(--text-secondary);">B316 Ring Road</span>
+              <span style="color:var(--accent-orange); font-weight:600;">Moderate — +5min</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:12px;">
+              <span style="color:var(--text-secondary);">Thames Embankment</span>
+              <span style="color:var(--accent-green); font-weight:600;">Clear — On time</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REPORTS PANEL -->
+    <div class="panel-content" id="panel-reports" style="display:none;">
+      <div class="section-heading"><span class="icon" style="background:rgba(168,85,247,0.15);">📢</span> Public Reports & Engagement</div>
+
+      <div class="report-item">
+        <div class="report-header">
+          <span class="report-type damage">Damage Report</span>
+          <span class="report-time">12 min ago</span>
+        </div>
+        <div class="report-body">ThinkLid 240lt (TL-240-0087) at Victoria Park Gate A has a broken lid mechanism. Lid won't close properly, causing rainwater ingress and overflow. Sensor confirms lid-open state.</div>
+        <div class="report-meta">
+          <span class="report-channel">📱 Mobile App</span>
+          <span>· GPS verified</span>
+          <span>· Photo attached</span>
+          <span>· <span style="color:var(--accent-teal);">ThinkLid 240lt</span></span>
+        </div>
+      </div>
+
+      <div class="report-item">
+        <div class="report-header">
+          <span class="report-type overflow">Overflow</span>
+          <span class="report-time">28 min ago</span>
+        </div>
+        <div class="report-body">ThinkLid 240lt units overflowing at Market Square near food stalls. Multiple ThinkLid bins affected in Bay 2 and 3 area. Lid jammed open on TL-240-0134.</div>
+        <div class="report-meta">
+          <span class="report-channel">🐦 Social Media</span>
+          <span>· @resident_jay</span>
+          <span>· 3 similar reports</span>
+          <span>· <span style="color:var(--accent-teal);">ThinkLid 240lt</span></span>
+        </div>
+      </div>
+
+      <div class="report-item">
+        <div class="report-header">
+          <span class="report-type request">New Bin Request</span>
+          <span class="report-time">1h ago</span>
+        </div>
+        <div class="report-body">Request for additional ThinkLid 120lt recycling unit near the new playground area in Riverside Gardens. Currently no ThinkLid bins within 200m.</div>
+        <div class="report-meta">
+          <span class="report-channel">🏛️ Gov Portal</span>
+          <span>· Council Ref #4821</span>
+        </div>
+      </div>
+
+      <div class="report-item">
+        <div class="report-header">
+          <span class="report-type feedback">Positive Feedback</span>
+          <span class="report-time">2h ago</span>
+        </div>
+        <div class="report-body">Great improvement in collection frequency at Station Plaza. The new ThinkLid 120lt smart bins are working really well — lids close automatically and the area stays clean. Thank you!</div>
+        <div class="report-meta">
+          <span class="report-channel">📱 Mobile App</span>
+          <span>· Verified resident</span>
+        </div>
+      </div>
+
+      <div class="report-item">
+        <div class="report-header">
+          <span class="report-type damage">Vandalism</span>
+          <span class="report-time">3h ago</span>
+        </div>
+        <div class="report-body">Graffiti on the ThinkLid 240lt recycling info panel at High Street (TL-240-0198). QR code for sorting guide is no longer scannable. Lid mechanism undamaged.</div>
+        <div class="report-meta">
+          <span class="report-channel">📱 Mobile App</span>
+          <span>· Work order raised</span>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="section-heading"><span class="icon" style="background:rgba(34,197,94,0.15);">📊</span> Engagement Channels</div>
+        <div class="analytics-row">
+          <div class="analytics-label">Mobile App</div>
+          <div class="analytics-bar"><div class="analytics-bar-fill" style="width:65%; background:var(--accent-green);"></div></div>
+          <div class="analytics-val" style="color:var(--accent-green);">65%</div>
+        </div>
+        <div class="analytics-row">
+          <div class="analytics-label">Social Media</div>
+          <div class="analytics-bar"><div class="analytics-bar-fill" style="width:20%; background:var(--accent-blue);"></div></div>
+          <div class="analytics-val" style="color:var(--accent-blue);">20%</div>
+        </div>
+        <div class="analytics-row">
+          <div class="analytics-label">Gov Portal</div>
+          <div class="analytics-bar"><div class="analytics-bar-fill" style="width:10%; background:var(--accent-purple);"></div></div>
+          <div class="analytics-val" style="color:var(--accent-purple);">10%</div>
+        </div>
+        <div class="analytics-row">
+          <div class="analytics-label">Info Displays</div>
+          <div class="analytics-bar"><div class="analytics-bar-fill" style="width:5%; background:var(--accent-orange);"></div></div>
+          <div class="analytics-val" style="color:var(--accent-orange);">5%</div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="section-heading"><span class="icon" style="background:rgba(6,182,212,0.15);">🎓</span> Educational Platform</div>
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px;">
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span style="color:var(--text-secondary);">Recycling Guide Views</span>
+              <span style="font-weight:600; color:var(--accent-green);">1,247 this week</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span style="color:var(--text-secondary);">QR Scans at ThinkLid Units</span>
+              <span style="font-weight:600; color:var(--accent-blue);">384 today</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span style="color:var(--text-secondary);">Info Display Interactions</span>
+              <span style="font-weight:600; color:var(--accent-purple);">892 this week</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== MAP INITIALIZATION =====
+const map = L.map('map', {
+  zoomControl: true,
+  attributionControl: false
+}).setView([51.505, -0.09], 13);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19
+}).addTo(map);
+
+// ===== BIN DATA =====
+const bins = [
+  { name: "Central Park Main", loc: "Victoria Park, Gate A", lat: 51.536, lng: -0.042, fill: 90, status: "critical", type: "General Waste", thinklid: "ThinkLid 240lt", lidStatus: "Closed", sensorId: "TL-240-0087", lastService: "27 Feb" },
+  { name: "Market Square West", loc: "Borough Market, Bay 3", lat: 51.505, lng: -0.091, fill: 85, status: "critical", type: "Mixed", thinklid: "ThinkLid 240lt", lidStatus: "Open — Jammed", sensorId: "TL-240-0134", lastService: "25 Feb" },
+  { name: "Riverside Walk South", loc: "Thames Path, Sec 12", lat: 51.507, lng: -0.116, fill: 70, status: "warning", type: "Recycling", thinklid: "ThinkLid 120lt", lidStatus: "Closed", sensorId: "TL-120-0221", lastService: "28 Feb" },
+  { name: "High Street Cluster", loc: "Oxford St, Zone B", lat: 51.515, lng: -0.142, fill: 65, status: "warning", type: "General Waste", thinklid: "ThinkLid 240lt", lidStatus: "Closed", sensorId: "TL-240-0198", lastService: "26 Feb" },
+  { name: "Station Plaza North", loc: "Kings Cross, Exit 2", lat: 51.531, lng: -0.124, fill: 40, status: "good", type: "Recycling", thinklid: "ThinkLid 120lt", lidStatus: "Closed", sensorId: "TL-120-0315", lastService: "1 Mar" },
+  { name: "Library Gardens", loc: "Camden, North Wing", lat: 51.539, lng: -0.143, fill: 25, status: "good", type: "General Waste", thinklid: "ThinkLid 120lt", lidStatus: "Closed", sensorId: "TL-120-0402", lastService: "28 Feb" },
+  { name: "Southbank Promenade", loc: "South Bank, Sec 4", lat: 51.506, lng: -0.072, fill: 60, status: "warning", type: "Mixed", thinklid: "ThinkLid 240lt", lidStatus: "Closed", sensorId: "TL-240-0267", lastService: "27 Feb" },
+  { name: "Festival Gardens", loc: "Jubilee Gardens", lat: 51.503, lng: -0.118, fill: 45, status: "good", type: "Recycling", thinklid: "ThinkLid 120lt", lidStatus: "Closed", sensorId: "TL-120-0389", lastService: "1 Mar" },
+  { name: "East End Common", loc: "Mile End, Gate B", lat: 51.525, lng: -0.034, fill: 55, status: "warning", type: "General Waste", thinklid: "ThinkLid 240lt", lidStatus: "Closed", sensorId: "TL-240-0312", lastService: "26 Feb" },
+  { name: "Pier Approach", loc: "Westminster Pier", lat: 51.501, lng: -0.124, fill: 50, status: "good", type: "Mixed", thinklid: "ThinkLid 120lt", lidStatus: "Closed", sensorId: "TL-120-0445", lastService: "28 Feb" }
+];
+
+// ===== CUSTOM MARKERS =====
+function createBinMarker(bin) {
+  const icon = L.divIcon({
+    className: 'custom-marker',
+    html: `<div class="marker-pin ${bin.status}">${bin.fill}%</div>`,
+    iconSize: [30, 36],
+    iconAnchor: [15, 36],
+    popupAnchor: [0, -36]
+  });
+
+  const marker = L.marker([bin.lat, bin.lng], { icon }).addTo(map);
+  const lidColor = bin.lidStatus === 'Closed' ? '#22c55e' : '#ef4444';
+  marker.bindPopup(`
+    <div class="popup-title">${bin.name}</div>
+    <div style="display:inline-block; background:rgba(20,184,166,0.15); color:#14b8a6; font-size:10px; font-weight:700; padding:2px 8px; border-radius:8px; margin-bottom:8px; letter-spacing:0.3px;">${bin.thinklid}</div>
+    <div class="popup-row"><span class="label">Sensor ID</span><span class="value" style="font-family:monospace; font-size:11px;">${bin.sensorId}</span></div>
+    <div class="popup-row"><span class="label">Location</span><span class="value">${bin.loc}</span></div>
+    <div class="popup-row"><span class="label">Fill Level</span><span class="value" style="color:${bin.status === 'critical' ? '#ef4444' : bin.status === 'warning' ? '#f59e0b' : '#22c55e'}">${bin.fill}%</span></div>
+    <div class="popup-row"><span class="label">Lid Status</span><span class="value" style="color:${lidColor}">${bin.lidStatus}</span></div>
+    <div class="popup-row"><span class="label">Type</span><span class="value">${bin.type}</span></div>
+    <div class="popup-row"><span class="label">Capacity</span><span class="value">${bin.thinklid.includes('240') ? '240 litres' : '120 litres'}</span></div>
+    <div class="popup-row"><span class="label">Last Service</span><span class="value">${bin.lastService}</span></div>
+    <div class="popup-row"><span class="label">Status</span><span class="value">${bin.status.charAt(0).toUpperCase() + bin.status.slice(1)}</span></div>
+    <div class="popup-row"><span class="label">Predicted Full</span><span class="value">${bin.fill > 80 ? '~1hr' : bin.fill > 60 ? '~3hr' : '~6hr+'}</span></div>
+  `);
+  return marker;
+}
+
+const markers = bins.map(createBinMarker);
+
+// ===== ROUTE LINES =====
+const routeAlpha = L.polyline([
+  [51.536, -0.042], [51.525, -0.060], [51.515, -0.075],
+  [51.505, -0.091], [51.507, -0.116], [51.515, -0.142]
+], { color: '#3b82f6', weight: 3, opacity: 0.7, dashArray: '10 6' }).addTo(map);
+
+const routeBeta = L.polyline([
+  [51.531, -0.124], [51.535, -0.135], [51.539, -0.143],
+  [51.530, -0.060], [51.525, -0.034]
+], { color: '#a855f7', weight: 3, opacity: 0.7, dashArray: '10 6' }).addTo(map);
+
+const routeGamma = L.polyline([
+  [51.506, -0.072], [51.503, -0.100], [51.503, -0.118], [51.501, -0.124]
+], { color: '#f59e0b', weight: 3, opacity: 0.7, dashArray: '10 6' }).addTo(map);
+
+// ===== FOCUS BIN =====
+function focusBin(index) {
+  const bin = bins[index];
+  map.flyTo([bin.lat, bin.lng], 16, { duration: 0.8 });
+  markers[index].openPopup();
+
+  document.querySelectorAll('.bin-item').forEach((el, i) => {
+    el.classList.toggle('selected', i === index);
+  });
+}
+
+// ===== PANEL SWITCHING =====
+function switchPanel(panel) {
+  document.querySelectorAll('.panel-content').forEach(el => el.style.display = 'none');
+  document.getElementById('panel-' + panel).style.display = 'block';
+  document.querySelectorAll('.panel-tab').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+// ===== VIEW SWITCHING =====
+function switchView(view) {
+  document.querySelectorAll('.topbar-tab').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+
+  if (view === 'routes') switchPanel('routes');
+  else if (view === 'analytics') switchPanel('weather');
+  else if (view === 'engagement') switchPanel('reports');
+}
+
+// ===== MAP LAYER TOGGLE =====
+function toggleLayer(layer) {
+  event.target.classList.toggle('active');
+}
+
+// ===== AGENT SELECTION =====
+function selectAgent(type) {
+  document.querySelectorAll('.agent-card').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+
+  const panelMap = { route: 'routes', engage: 'reports', weather: 'weather', ar: 'ar' };
+  const panel = panelMap[type];
+  document.querySelectorAll('.panel-content').forEach(el => el.style.display = 'none');
+  document.getElementById('panel-' + panel).style.display = 'block';
+  document.querySelectorAll('.panel-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.textContent.toLowerCase() === panel ||
+      (panel === 'reports' && tab.textContent === 'Reports') ||
+      (panel === 'routes' && tab.textContent === 'Routes'));
+  });
+}
+
+// ===== AR MODE TOGGLE =====
+let arMode = false;
+function toggleARMode() {
+  arMode = !arMode;
+  const btn = event.target.closest('.topbar-btn');
+  btn.style.borderColor = arMode ? 'var(--accent-purple)' : '';
+  btn.style.color = arMode ? 'var(--accent-purple)' : '';
+
+  if (arMode) {
+    switchPanel('ar');
+    document.querySelectorAll('.panel-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.textContent === 'AR');
+    });
+  }
+}
+
+// ===== NOTIFICATIONS =====
+function toggleNotifications() {
+  alert('5 Active Alerts:\n\n1. ThinkLid 240lt Central Park Main (TL-240-0087) — 90% full (Critical)\n2. ThinkLid 240lt Market Square West (TL-240-0134) — 85% full, lid jammed open\n3. Rain expected at 2pm — Check ThinkLid lid seals on riverside 120lt units\n4. Damage report: ThinkLid 240lt Victoria Park Gate A — lid mechanism broken\n5. High traffic on A4 — Route Alpha delayed, 3 ThinkLid 240lt collections pending');
+}
+
+// ===== SIMULATE LIVE UPDATES =====
+setInterval(() => {
+  const idx = Math.floor(Math.random() * bins.length);
+  const change = Math.random() > 0.7 ? Math.floor(Math.random() * 3) + 1 : 0;
+  if (bins[idx].fill < 100) {
+    bins[idx].fill = Math.min(100, bins[idx].fill + change);
+    if (bins[idx].fill >= 80) bins[idx].status = 'critical';
+    else if (bins[idx].fill >= 60) bins[idx].status = 'warning';
+    else bins[idx].status = 'good';
+  }
+}, 10000);
+
+// Fit map to show all markers
+const group = L.featureGroup(markers);
+map.fitBounds(group.getBounds().pad(0.1));
+</script>
+</body>
+</html>
